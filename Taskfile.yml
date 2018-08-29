@@ -9,6 +9,8 @@ vars:
   BUILDTAGS: ""
   GOX_OUTPUT: "{{.BUILD_DIR}}/{{`{{.OS}}_{{.Arch}}_{{.Dir}}`}}"
   DIST_USER: andrexus
+  GIT_VERSION:
+    sh: git describe --abbrev=0 --tags 2> /dev/null || git rev-parse HEAD
   GOTOOLS: >
     github.com/mitchellh/gox
     github.com/tcnksm/ghr
