@@ -4,6 +4,11 @@
 
 Prometheus exporter for Hetzner Server Market API
 
+Start locally in docker:
+```
+docker run --rm -p 8080:8080 -v $(pwd)/creds.json:/etc/creds.json andrexus/hetzner-server-market-exporter -robot-api-credentials /etc/creds.json
+```
+
 
 ## Licence
 
