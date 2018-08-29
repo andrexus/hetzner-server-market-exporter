@@ -1,0 +1,11 @@
+language: go
+
+go:
+  - tip
+
+env:
+  global:
+    - "PATH=/home/travis/gopath/bin:$PATH"
+
+script:
+  - make

@@ -1,0 +1,57 @@
+version: '2'
+
+vars:
+  PROJECT_NAMESPACE: andrexus
+  PROJECT_NAME: hetzner-server-market-exporter
+  PROJECT: github.com/{{.PROJECT_NAMESPACE}}/{{.PROJECT_NAME}}
+  OSARCH: darwin/amd64 linux/amd64 linux/arm
+  BUILD_DIR: build
+  BUILDTAGS: ""
+  GOX_OUTPUT: "{{.BUILD_DIR}}/{{`{{.OS}}_{{.Arch}}_{{.Dir}}`}}"
+  DIST_USER: andrexus
+  GOTOOLS: >
+    github.com/mitchellh/gox
+    github.com/tcnksm/ghr
+  LINTERS: >
+    github.com/mgechev/revive
+
+tasks:
+  default:
+    cmds:
+    - task: build
+
+  setup_build:
+    cmds:
+    - go get -v {{.GOTOOLS}}
+    - go get -v {{.LINTERS}}
+
+  build:
+    cmds:
+    - task: clean
+    - task: setup_build
+    - task: test
+    - echo "==> Compiling..."
+    - CGO_ENABLED=0 gox -osarch "{{.OSARCH}}" -output "{{.GOX_OUTPUT}}"
+
+  dist:
+    cmds:
+    - ghr -u {{.DIST_USER}} --token {{.GITHUB_TOKEN}} --replace {{.GIT_VERSION}} build/
+
+  clean:
+    cmds:
+    - echo "==> Cleaning BUILD_DIR..."
+    - rm -rf {{.BUILD_DIR}}/*
+
+  test:
+    deps: [setup_build]
+    cmds:
+    - task: lint
+    - echo "==> Testing code..."
+    - go test -v -race -tags "{{.BUILDTAGS}} cgo" $(go list {{.PROJECT}}/...)
+
+  lint:
+    deps: [revive]
+
+  revive:
+    cmds:
+    - revive -config revive.toml -formatter stylish ./...
