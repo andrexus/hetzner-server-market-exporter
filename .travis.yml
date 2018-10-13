@@ -1,11 +1,12 @@
 language: go
 
 go:
-  - master
+  - 1.11.x
 
 env:
   global:
     - "PATH=/home/travis/gopath/bin:$PATH"
+    - GO111MODULE=on
 
 script:
   - make

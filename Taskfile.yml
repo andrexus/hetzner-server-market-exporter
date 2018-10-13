@@ -12,10 +12,16 @@ vars:
   GIT_VERSION:
     sh: git describe --abbrev=0 --tags 2> /dev/null || git rev-parse HEAD
   GOTOOLS: >
+    github.com/alvaroloes/enumer
+    github.com/mjibson/esc
     github.com/mitchellh/gox
     github.com/tcnksm/ghr
   LINTERS: >
     github.com/mgechev/revive
+    github.com/kisielk/errcheck
+    golang.org/x/tools/cmd/goimports
+    honnef.co/go/tools/cmd/staticcheck
+    honnef.co/go/tools/cmd/unused
 
 tasks:
   default:
@@ -30,8 +36,6 @@ tasks:
   build:
     cmds:
     - task: clean
-    - task: setup_build
-    - task: test
     - echo "==> Compiling..."
     - CGO_ENABLED=0 gox -osarch "{{.OSARCH}}" -output "{{.GOX_OUTPUT}}"
 
@@ -45,7 +49,6 @@ tasks:
     - rm -rf {{.BUILD_DIR}}/*
 
   test:
-    deps: [setup_build]
     cmds:
     - task: lint
     - echo "==> Testing code..."
@@ -53,6 +56,11 @@ tasks:
 
   lint:
     deps: [revive]
+  #    deps: [gometalinter, revive]
+
+  gometalinter:
+    cmds:
+    - gometalinter ./...
 
   revive:
     cmds:

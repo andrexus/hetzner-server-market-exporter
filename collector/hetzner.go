@@ -2,7 +2,7 @@ package collector
 
 import (
 	"context"
-	"log"
+
 	"strconv"
 	"strings"
 	"sync"
@@ -10,6 +10,7 @@ import (
 
 	hetzner "github.com/andrexus/go-hetzner-robot"
 	"github.com/prometheus/client_golang/prometheus"
+	log "github.com/sirupsen/logrus"
 )
 
 type hetznerRobotCollector struct {
@@ -20,6 +21,7 @@ type hetznerRobotCollector struct {
 	deletedServers       map[int]hetzner.Product
 	deletedServersNotify chan int
 	mutex                sync.Mutex
+	logger               *log.Entry
 }
 
 const (
@@ -27,12 +29,13 @@ const (
 	metricSubsystem   = "server_market"
 	metricName        = "price"
 	metricDescription = "Monthly price in euros"
+	exporterName      = "hetzner-server-market-exporter"
 )
 
 var serverDefaultLabels = []string{"id", "name", "description", "traffic", "dist", "arch", "lang", "cpu", "cpu_benchmark", "memory_size", "hdd_size", "hdd_text", "hdd_count", "datacenter", "network_speed", "fixed_price"}
 
 //NewHetznerRobotCollector returns new instance of hetznerRobotCollector
-func NewHetznerRobotCollector(client *hetzner.Client, refreshIntervalSeconds uint) prometheus.Collector {
+func NewHetznerRobotCollector(client *hetzner.Client, refreshIntervalSeconds uint, logger *log.Entry) prometheus.Collector {
 	pricesVec := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: metricNamespace,
 		Subsystem: metricSubsystem,
@@ -46,16 +49,17 @@ func NewHetznerRobotCollector(client *hetzner.Client, refreshIntervalSeconds uin
 		servers:              make(map[int]hetzner.Product, 0),
 		deletedServers:       make(map[int]hetzner.Product, 0),
 		deletedServersNotify: make(chan int),
+		logger:               logger,
 	}
 	go collector.updateServersMap(time.Now())
 	ticker := time.NewTicker(time.Duration(refreshIntervalSeconds) * time.Second)
-	log.Printf("[DEBUG] fetching Hetzner Robot API every %d seconds", refreshIntervalSeconds)
+	logger.WithField("refresh_interval", refreshIntervalSeconds).Debug("fetching Hetzner Robot API")
 	go func(c *hetznerRobotCollector) {
 		go c.collectDeletedServers()
 		for t := range ticker.C {
 			err := c.updateServersMap(t)
 			if err != nil {
-				log.Printf("[ERROR] could not fetch server market products: %v", err)
+				logger.WithField("error", err).Error("could not fetch server market products")
 			}
 		}
 	}(collector)
@@ -76,7 +80,10 @@ func (c *hetznerRobotCollector) Collect(ch chan<- prometheus.Metric) {
 		gauge := c.prices.WithLabelValues(extractServerLabels(&server)...)
 		price, err := strconv.ParseFloat(server.PriceVat, 32)
 		if err != nil {
-			log.Printf("[WARN] could not convert price string [%s] to float: %v", server.PriceVat, err)
+			c.logger.WithFields(log.Fields{
+				"price": server.PriceVat,
+				"error": err,
+			}).Warn("could not convert price string to float")
 			continue
 		}
 		gauge.Set(price)
@@ -85,7 +92,7 @@ func (c *hetznerRobotCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *hetznerRobotCollector) updateServersMap(t time.Time) error {
-	log.Printf("[DEBUG] fetching server market products at %s", t.Format(time.RFC3339))
+	c.logger.WithField("fetch_time", t.Format(time.RFC3339)).Debug("fetching server market products")
 	products, err := c.fetchServerMarketProducts()
 	if err != nil {
 		return err
@@ -94,7 +101,7 @@ func (c *hetznerRobotCollector) updateServersMap(t time.Time) error {
 	for _, product := range products {
 		productIDs = append(productIDs, product.ID)
 	}
-	log.Printf("[DEBUG] found %d products", len(products))
+	c.logger.WithField("total", len(products)).Debug("products fetched")
 	for _, product := range products {
 		c.mutex.Lock()
 		if _, ok := c.servers[product.ID]; !ok {
@@ -104,7 +111,7 @@ func (c *hetznerRobotCollector) updateServersMap(t time.Time) error {
 	}
 	for id, server := range c.servers {
 		if !contains(productIDs, id) {
-			log.Printf("[DEBUG] server %d was deleted", id)
+			c.logger.WithField("id", id).Debug("server was deleted")
 			c.deletedServers[id] = server
 		}
 	}
@@ -112,11 +119,11 @@ func (c *hetznerRobotCollector) updateServersMap(t time.Time) error {
 }
 
 func (c *hetznerRobotCollector) collectDeletedServers() {
-	log.Println("[DEBUG] start collecting deleted servers")
+	log.Debug("start collecting deleted servers")
 	for {
 		select {
 		case id := <-c.deletedServersNotify:
-			log.Printf("[DEBUG] collecting deleted server %d", id)
+			c.logger.WithField("id", id).Debug("collecting deleted server")
 			delete(c.deletedServers, id)
 		}
 	}
