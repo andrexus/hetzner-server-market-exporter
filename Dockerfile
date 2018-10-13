@@ -1,6 +1,6 @@
 FROM andrexus/baseimage
 
-ARG APP_VERSION=0.1.0
+ARG APP_VERSION=0.1.1
 ARG DOWNLOAD_URL=https://github.com/andrexus/hetzner-server-market-exporter/releases/download/v$APP_VERSION/linux_amd64_hetzner-server-market-exporter
 
 WORKDIR /srv
